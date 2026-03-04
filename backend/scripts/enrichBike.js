@@ -1,4 +1,3 @@
-// backend/scripts/enriquecerMotos.js
 const admin = require('firebase-admin');
 const MotorcycleEnricher = require('../src/modules/motorcycles/motorcycle.enricher');
 
