@@ -34,6 +34,8 @@ function RegisterForm() {
   const [password, setPassword]           = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [touched, setTouched]             = useState({})
+  const [emailSent, setEmailSent]         = useState(false)
+  const [sentTo, setSentTo]               = useState('')
   const navigate                          = useNavigate()
   const { register, loading, error }      = useAuth()
 
@@ -62,10 +64,49 @@ function RegisterForm() {
     if (Object.keys(fieldErrors).length > 0) return
     try {
       await register(name, email, password)
-      navigate('/')
+      setSentTo(email)
+      setEmailSent(true)
     } catch {
       // el error queda capturado en useAuth().error
     }
+  }
+
+  if (emailSent) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background-light dark:bg-background-dark p-4">
+        <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-xl shadow-2xl p-10 text-center">
+          <div className="flex justify-center mb-6">
+            <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+              <span className="material-symbols-outlined text-4xl text-primary">mark_email_read</span>
+            </div>
+          </div>
+          <h2 className="text-2xl font-bold text-slate-800 dark:text-white mb-3">¡Revisa tu correo!</h2>
+          <p className="text-slate-500 dark:text-slate-400 text-sm leading-relaxed">
+            Te enviamos un enlace de verificación a<br />
+            <span className="font-semibold text-primary">{sentTo}</span>.<br /><br />
+            Haz clic en el enlace del correo para activar tu cuenta.
+            El enlace expira en 24 horas.
+          </p>
+          <p className="mt-6 text-xs text-slate-400">
+            ¿No lo ves? Revisa la carpeta de spam o{' '}
+            <button
+              type="button"
+              onClick={() => { setEmailSent(false); setSentTo('') }}
+              className="text-primary font-semibold hover:underline"
+            >
+              vuelve a intentarlo
+            </button>.
+          </p>
+          <button
+            type="button"
+            onClick={() => navigate('/login')}
+            className="mt-8 w-full py-3 bg-primary text-white font-semibold rounded-lg hover:bg-primary/90 transition-colors"
+          >
+            Ir al inicio de sesión
+          </button>
+        </div>
+      </div>
+    )
   }
 
   return (

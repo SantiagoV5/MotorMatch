@@ -3,10 +3,24 @@ const authService = require('./auth.service');
 // POST /api/auth/register
 async function register(req, res, next) {
   try {
-    const { token, user } = await authService.register(req.body);
+    const { user } = await authService.register(req.body);
     res.status(201).json({
-      message: 'Cuenta creada exitosamente',
-      token,
+      message: 'Cuenta creada. Revisa tu correo electrónico para confirmar tu registro.',
+      user,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// GET /api/auth/verify-email?token=xxx
+async function verifyEmail(req, res, next) {
+  try {
+    const { token } = req.query;
+    const { token: jwtToken, user } = await authService.verifyEmail(token);
+    res.status(200).json({
+      message: '¡Correo verificado exitosamente! Ya puedes iniciar sesión.',
+      token: jwtToken,
       user,
     });
   } catch (err) {
@@ -28,4 +42,4 @@ async function login(req, res, next) {
   }
 }
 
-module.exports = { register, login };
+module.exports = { register, verifyEmail, login };

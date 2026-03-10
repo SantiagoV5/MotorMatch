@@ -1,6 +1,7 @@
 ﻿import { Routes, Route, Navigate } from 'react-router-dom'
 import LoginForm from './features/auth/components/loginForm'
 import RegisterForm from './features/auth/components/registerForm'
+import VerifyEmailPage from './features/auth/components/VerifyEmailPage'
 
 // Placeholder temporal — se reemplazará por el dashboard real
 function Home() {
@@ -21,8 +22,9 @@ function App() {
     <Routes>
       <Route path="/"         element={<Home />} />
       <Route path="/login"    element={<LoginForm />} />
-      <Route path="/register" element={<RegisterForm />} />
-      <Route path="*"         element={<Navigate to="/login" replace />} />
+      <Route path="/register"     element={<RegisterForm />} />
+      <Route path="/verify-email"  element={<VerifyEmailPage />} />
+      <Route path="*"              element={<Navigate to="/login" replace />} />
     </Routes>
   )
 }

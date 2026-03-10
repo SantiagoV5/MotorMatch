@@ -38,7 +38,8 @@ function useAuth() {
     setError(null)
     try {
       const data = await registerService(name, email, password)
-      persist(data.token, data.user)
+      // No llamamos persist() aquí: el usuario aún no tiene JWT.
+      // Recibirá el token solo después de verificar su email.
       return data
     } catch (err) {
       const message = err.response?.data?.message || 'Error al registrarse'
