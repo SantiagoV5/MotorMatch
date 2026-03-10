@@ -1,14 +1,15 @@
-const bcrypt = require('bcryptjs');
-const jwt    = require('jsonwebtoken');
+const bcrypt  = require('bcryptjs');
+const jwt     = require('jsonwebtoken');
+const crypto  = require('crypto');
 
-const prisma             = require('../../config/database');
+const prisma                         = require('../../config/database');
 const { JWT_SECRET, JWT_EXPIRES_IN } = require('../../config/environment');
+const { sendVerificationEmail }      = require('../../utils/mailer');
 
-const SALT_ROUNDS = 12; // factor de coste de bcrypt — balance seguridad/velocidad
+const SALT_ROUNDS = 12;
 
-// ── Helpers ─────────────────────────────────────────────────────────────────
+// ── Helpers ──────────────────────────────────────────────────────────────────
 
-/** Genera un JWT firmado con el id y email del usuario */
 function signToken(user) {
   return jwt.sign(
     { sub: user.id, email: user.email },
@@ -17,59 +18,94 @@ function signToken(user) {
   );
 }
 
-/** Error de negocio con código HTTP explícito */
 function createError(message, statusCode) {
   const err = new Error(message);
   err.statusCode = statusCode;
   return err;
 }
 
-// ── Registro ────────────────────────────────────────────────────────────────
+// ── Registro ─────────────────────────────────────────────────────────────────
 
 async function register({ name, email, password }) {
-  // Verificar si el email ya existe
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
     throw createError('Ya existe una cuenta con ese correo electrónico', 409);
   }
 
-  // Hash seguro de la contraseña
-  const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
+  const passwordHash        = await bcrypt.hash(password, SALT_ROUNDS);
+  const verificationToken   = crypto.randomBytes(32).toString('hex');
+  const verificationExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h
 
-  // Crear usuario en la BD — fullName mapea a full_name en PostgreSQL
   const user = await prisma.user.create({
-    data: { fullName: name, email, passwordHash },
+    data: { fullName: name, email, passwordHash, verificationToken, verificationExpiresAt },
     select: { id: true, fullName: true, email: true, createdAt: true },
   });
 
-  const token = signToken(user);
+  // Construir URL de verificación y enviar email
+  // El envío es no-fatal: si falla, el usuario queda registrado y puede reconectar
+  const appUrl = process.env.APP_URL || 'http://localhost:5173';
+  const verificationUrl = `${appUrl}/verify-email?token=${verificationToken}`;
+  try {
+    await sendVerificationEmail({ to: email, name, verificationUrl });
+  } catch (mailErr) {
+    const { logger } = require('../../utils/logger');
+    logger.error(`Error enviando email de verificación a ${email}: ${mailErr.message}`);
+    logger.info(`[FALLBACK] Enlace de verificación: ${verificationUrl}`);
+  }
 
-  // Normalizar fullName → name para el frontend
-  return { token, user: { id: user.id, name: user.fullName, email: user.email, createdAt: user.createdAt } };
+  // No emitir token JWT hasta que el email esté verificado
+  return {
+    user: { id: user.id, name: user.fullName, email: user.email, createdAt: user.createdAt },
+  };
 }
 
-// ── Login ───────────────────────────────────────────────────────────────────
+// ── Verificar email ───────────────────────────────────────────────────────────
 
-async function login({ email, password }) {
-  // Buscar usuario — mensaje genérico para no revelar si el email existe
-  const user = await prisma.user.findUnique({ where: { email } });
+async function verifyEmail(token) {
+  if (!token) throw createError('Token de verificación requerido', 400);
+
+  const user = await prisma.user.findUnique({ where: { verificationToken: token } });
+
   if (!user) {
-    throw createError('Correo o contraseña incorrectos', 401);
+    throw createError('Enlace de verificación inválido o ya utilizado', 400);
+  }
+  if (user.emailVerified) {
+    throw createError('Este correo ya fue verificado', 400);
+  }
+  if (user.verificationExpiresAt < new Date()) {
+    throw createError('El enlace de verificación ha expirado. Solicita uno nuevo.', 400);
   }
 
-  // Comparar contraseña con el hash almacenado
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { emailVerified: true, verificationToken: null, verificationExpiresAt: null },
+  });
+
+  const jwtToken = signToken(user);
+  return {
+    token: jwtToken,
+    user: { id: user.id, name: user.fullName, email: user.email, createdAt: user.createdAt },
+  };
+}
+
+// ── Login ─────────────────────────────────────────────────────────────────────
+
+async function login({ email, password }) {
+  const user = await prisma.user.findUnique({ where: { email } });
+  if (!user) throw createError('Correo o contraseña incorrectos', 401);
+
   const match = await bcrypt.compare(password, user.passwordHash);
-  if (!match) {
-    throw createError('Correo o contraseña incorrectos', 401);
+  if (!match) throw createError('Correo o contraseña incorrectos', 401);
+
+  if (!user.emailVerified) {
+    throw createError('Debes verificar tu correo electrónico antes de iniciar sesión.', 403);
   }
 
   const token = signToken(user);
-
-  // Normalizar fullName → name y excluir el hash de la respuesta
   return {
     token,
     user: { id: user.id, name: user.fullName, email: user.email, createdAt: user.createdAt },
   };
 }
 
-module.exports = { register, login };
+module.exports = { register, verifyEmail, login };
