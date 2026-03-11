@@ -1,6 +1,4 @@
-<<<<<<< Updated upstream
-=======
-﻿import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route, Navigate } from 'react-router-dom'
 import LoginForm from './features/auth/components/loginForm'
 import RegisterForm from './features/auth/components/registerForm'
 import VerifyEmailPage from './features/auth/components/VerifyEmailPage'
@@ -41,4 +39,3 @@ function App() {
 }
 
 export default App
->>>>>>> Stashed changes
